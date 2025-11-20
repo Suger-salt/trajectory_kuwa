@@ -300,7 +300,7 @@ def plot_time_series(poses):
     axes[0].plot(times, rolls, "r-", linewidth=2)
     axes[0].set_ylabel("Roll (°)")
     axes[0].grid(True)
-    axes[0].set_title("鍬の姿勢変化（オイラー角）")
+    axes[0].set_title("kuwa_change_posture (Euler anges) ")
 
     axes[1].plot(times, pitches, "g-", linewidth=2)
     axes[1].set_ylabel("Pitch (°)")
@@ -401,8 +401,36 @@ def create_animation(poses, interval=50, save_path=None):
         )
 
         # 鍬の形状（5点を結ぶ）
-        points = np.array([pose["p1"], pose["p2"], pose["p3"], pose["p4"], pose["p5"]])
-        ax.plot(points[:, 0], points[:, 1], points[:, 2], "k-", linewidth=3, alpha=0.7)
+        points_235 = np.array([pose["p2"], pose["p3"], pose["p5"], pose["p2"]])
+        ax.plot(
+            points_235[:, 0],
+            points_235[:, 1],
+            points_235[:, 2],
+            "k-",
+            linewidth=3,
+            alpha=0.8,
+        )
+
+        # 結びたい線：1 → 4
+        points_14 = np.array([pose["p1"], pose["p4"]])
+        ax.plot(
+            points_14[:, 0],
+            points_14[:, 1],
+            points_14[:, 2],
+            "k-",
+            linewidth=3,
+            alpha=0.8,
+        )
+
+        points_13 = np.array([pose["p1"], pose["p3"]])
+        ax.plot(
+            points_13[:, 0],
+            points_13[:, 1],
+            points_13[:, 2],
+            "k-",
+            linewidth=3,
+            alpha=0.8,
+        )
 
         # 座標軸
         axis_length = 100
@@ -505,9 +533,9 @@ if __name__ == "__main__":
     # デバッグ：最初のフレームの情報を表示
     print_frame_info(poses, 0)
 
-    # 特定フレームを可視化（例：最初のフレーム）
-    fig1 = visualize_frame(poses[0], frame_idx=0)
-    plt.show()
+    # 特定フレームを可視化（例：最初のフレーム） 最初のフレームの可視化
+    # fig1 = visualize_frame(poses[0], frame_idx=0)
+    # plt.show()
 
     # 時系列グラフ
     fig2 = plot_time_series(poses)
