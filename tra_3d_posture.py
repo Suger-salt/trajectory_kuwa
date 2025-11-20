@@ -496,6 +496,9 @@ def create_animation(
             f'Frame: {frame_idx} | Time: {pose["time"]:.2f}s | Roll: {pose["roll"]:.1f}° Pitch: {pose["pitch"]:.1f}° Yaw: {pose["yaw"]:.1f}°',
             fontsize=12,
         )
+        ax.set_xlabel("X [mm]")  # ← ここでX軸を設定
+        ax.set_ylabel("Y [mm]")  # ← ここでY軸を設定
+        ax.set_zlabel("Z [mm]")  # ← ここでZ軸を設定
         ax.legend(loc="upper right", fontsize=10)
         ax.grid(True, alpha=0.3)
 
@@ -652,6 +655,7 @@ if __name__ == "__main__":
     ###時間の区切りで動画保存
     segment_times = [5, 10, 15]
 
+    # ここコメントアウトで保存しない
     save_segmented_animations(
         poses,
         time_segments=segment_times,
