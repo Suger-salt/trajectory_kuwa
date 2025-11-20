@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
+import os
 
 
 # CSVファイルを読み込む
@@ -551,8 +552,13 @@ def print_frame_info(poses, frame_idx=0):
 
 
 # 複数セグメントの動画を保存する関数
+# 複数セグメントの動画を保存する関数
 def save_segmented_animations(
-    poses, time_segments, base_filename="kuwa_segment", interval=50
+    poses,
+    time_segments,
+    base_filename="kuwa_segment",
+    interval=50,
+    output_directory="data",
 ):
     """
     時間区切り配列に基づき、連続した区間で動画を保存する。
@@ -562,37 +568,46 @@ def save_segmented_animations(
     time_segments (list): 動画の区切りとなる時刻 (例: [1, 5, 10, 20])
     base_filename (str): 保存ファイル名の基本部分
     interval (int): アニメーションの間隔 (ms)
+    output_directory (str): ファイルを保存するフォルダ名（例: "data"）
     """
     if len(time_segments) < 2:
         print("エラー: time_segments には2つ以上の時刻が必要です。")
         return
 
-    # 配列を連続する (開始時刻, 終了時刻) のペアに変換
+    # 1. 保存フォルダの作成
+    try:
+        # フォルダが存在しない場合は作成 (exist_ok=True で、あってもエラーにならない)
+        os.makedirs(output_directory, exist_ok=True)
+        print(f"保存フォルダ '{output_directory}' を確認しました。")
+    except Exception as e:
+        print(f"エラー: フォルダ '{output_directory}' の作成に失敗しました: {e}")
+        return
+
     segment_pairs = list(zip(time_segments[:-1], time_segments[1:]))
 
     print(f"--- {len(segment_pairs)} 個の動画セグメントを保存します ---")
 
     for i, (start_time, end_time) in enumerate(segment_pairs):
-        # ファイル名を生成 (例: kuwa_segment_01_0.0s-5.0s.gif)
-        output_filename = (
+        # ファイル名を生成
+        segment_filename = (
             f"{base_filename}_{i+1:02d}_{start_time:.1f}s-{end_time:.1f}s.gif"
         )
+
+        # 2. フォルダ名とファイル名を結合して完全な保存パスを作成
+        output_path = os.path.join(output_directory, segment_filename)
+
         print(
-            f"\n[セグメント {i+1}] {start_time:.1f}s から {end_time:.1f}s までを {output_filename} に保存中..."
+            f"\n[セグメント {i+1}] {start_time:.1f}s から {end_time:.1f}s までを {output_path} に保存中..."
         )
 
         # create_animation 関数を呼び出し、保存パスを指定
-        # アニメーションは即座に表示せず、ファイルとして保存される
         anim = create_animation(
             poses,
             start_time=start_time,
             end_time=end_time,
             interval=interval,
-            save_path=output_filename,  # ここで保存を実行
+            save_path=output_path,  # 修正点: フォルダを含むパスを渡す
         )
-
-        # FuncAnimationの save メソッドは、内部でアニメーションを生成し保存する
-        # そのため、通常、保存処理が終わると anim オブジェクト自体は破棄されます
 
     print("\nすべてのセグメントの保存が完了しました。")
 
@@ -642,4 +657,5 @@ if __name__ == "__main__":
         time_segments=segment_times,
         base_filename="kuwa_segment_output",
         interval=50,  # 20fpsに相当
+        output_directory="data",
     )
