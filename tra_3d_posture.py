@@ -639,8 +639,9 @@ if __name__ == "__main__":
     # 姿勢データをCSVに出力
     export_poses_to_csv(poses, "kuwa_poses.csv")
 
-    start_sec = 5
-    end_sec = 20
+    # ここで時間の区切りが分かるよ！
+    start_sec = 38
+    end_sec = 48
 
     # アニメーション（コメントを外して使用）
     print("アニメーション作成中...")
@@ -656,10 +657,11 @@ if __name__ == "__main__":
     segment_times = [5, 10, 15]
 
     # ここコメントアウトで保存しない
-    save_segmented_animations(
-        poses,
-        time_segments=segment_times,
-        base_filename="kuwa_segment_output",
-        interval=50,  # 20fpsに相当
-        output_directory="data",
-    )
+    # save_segmented_animations(
+    #     poses,
+
+    #     time_segments=segment_times,
+    #     base_filename="kuwa_segment_output",
+    #     interval=50,  # 20fpsに相当
+    #     output_directory="data",
+    # )
