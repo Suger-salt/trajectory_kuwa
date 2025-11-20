@@ -316,49 +316,71 @@ def plot_time_series(poses):
 
 
 # アニメーション作成（5点版）
-def create_animation(poses, interval=50, save_path=None):
-    """姿勢変化のアニメーションを作成"""
-    if len(poses) == 0:
-        print("エラー: 有効なデータがありません")
+def create_animation(
+    poses, start_time=None, end_time=None, interval=50, save_path=None
+):
+    """姿勢変化のアニメーションを作成 (秒数指定対応)"""
+
+    # --- 1. 時間指定に基づいたデータ範囲の特定 ---
+    if start_time is not None:
+        # 開始時刻 >= time の最初のフレームを検索
+        # posesはtime順に並んでいる前提
+        start_idx = next((i for i, p in enumerate(poses) if p["time"] >= start_time), 0)
+    else:
+        start_idx = 0
+
+    if end_time is not None:
+        # 終了時刻 <= time の最後のフレームを検索
+        end_idx = (
+            next((i for i, p in enumerate(poses) if p["time"] > end_time), len(poses))
+            - 1
+        )
+    else:
+        end_idx = len(poses) - 1
+
+    # 範囲の検証と調整
+    if start_idx >= len(poses) or end_idx < start_idx:
+        print(
+            f"エラー: 指定された時間範囲 ({start_time}s〜{end_time}s) に有効なデータがありません。"
+        )
+        return None
+
+    # --- 2. データのスライス ---
+    # Pythonのスライスは終点を含まないので、end_idxを終点として使うには +1 する
+    subset_poses = poses[start_idx : end_idx + 1]
+
+    # 既存のデータチェック
+    if len(subset_poses) == 0:
+        print("エラー: 指定された範囲に有効なデータがありません")
         return None
 
     fig = plt.figure(figsize=(12, 9))
     ax = fig.add_subplot(111, projection="3d")
 
-    # 全データの範囲を計算（5点すべて、NaNを除外）
+    # 全体の表示範囲は元の poses 全体を使って計算を続行
+    # ... (既存の表示範囲計算コードはそのまま)
     all_points = []
-    for pose in poses:
+    for pose in poses:  # 範囲全体を使って計算（安定性のため）
         all_points.extend([pose["p1"], pose["p2"], pose["p3"], pose["p4"], pose["p5"]])
     all_points = np.array(all_points)
 
-    # NaNを除外して中心と範囲を計算
+    # ... (NaNチェックとcenter, margin計算は省略せずに残す)
     valid_points = all_points[~np.isnan(all_points).any(axis=1)]
-    if len(valid_points) == 0:
-        print("エラー: 有効な点データがありません")
-        return None
-
     center = np.mean(valid_points, axis=0)
-
-    # 各軸の範囲を個別に計算（より広く）
-    x_range = np.ptp(valid_points[:, 0])
-    y_range = np.ptp(valid_points[:, 1])
-    z_range = np.ptp(valid_points[:, 2])
-
-    # 余裕を持たせる（固定値：各軸±1000で合計2000の範囲）
-    x_margin = 1000
-    y_margin = 1000
-    z_margin = 1000
+    x_margin, y_margin, z_margin = 1000, 1000, 1000  # 固定マージン
 
     print(f"表示範囲: 中心={center}")
     print(f"X範囲: {center[0] - x_margin:.1f} ~ {center[0] + x_margin:.1f}")
     print(f"Y範囲: {center[1] - y_margin:.1f} ~ {center[1] + y_margin:.1f}")
     print(f"Z範囲: {center[2] - z_margin:.1f} ~ {center[2] + z_margin:.1f}")
 
+    # --- 3. update関数の修正 (subset_posesを使用) ---
     def update(frame):
         ax.clear()
-        pose = poses[frame]
+        # 修正点: frameは0から始まるため、subset_posesからデータを取得
+        pose = subset_poses[frame]
 
-        # 5点すべてをプロット（大きく、縁取り付き）
+        # ... (5点のプロット、鍬の形状、座標軸の描画コードは変更なし) ...
         ax.scatter(
             *pose["p1"],
             c="cyan",
@@ -400,18 +422,22 @@ def create_animation(poses, interval=50, save_path=None):
             linewidths=2,
         )
 
-        # 鍬の形状（5点を結ぶ）
-        points_235 = np.array([pose["p2"], pose["p3"], pose["p5"], pose["p2"]])
+        # 鍬の線を描画
+        points_235_triangle = np.array(
+            [pose["p2"], pose["p3"], pose["p5"], pose["p2"]]
+        )  # 修正/確認
+
+        # 描画コード：三角形
         ax.plot(
-            points_235[:, 0],
-            points_235[:, 1],
-            points_235[:, 2],
-            "k-",
+            points_235_triangle[:, 0],
+            points_235_triangle[:, 1],
+            points_235_triangle[:, 2],
+            "k-",  # 色と線の種類はお好みで
             linewidth=3,
             alpha=0.8,
         )
 
-        # 結びたい線：1 → 4
+        # 既存の線（例: 1-4や1-3を結ぶ線）はそのまま残す
         points_14 = np.array([pose["p1"], pose["p4"]])
         ax.plot(
             points_14[:, 0],
@@ -432,9 +458,10 @@ def create_animation(poses, interval=50, save_path=None):
             alpha=0.8,
         )
 
-        # 座標軸
-        axis_length = 100
+        # 鍬の形状、座標軸の描画
+
         origin = pose["origin"]
+        axis_length = 100
         ax.quiver(
             *origin,
             *pose["x_axis"] * axis_length,
@@ -457,16 +484,13 @@ def create_animation(poses, interval=50, save_path=None):
             linewidth=3,
         )
 
-        ax.set_xlabel("X", fontsize=12)
-        ax.set_ylabel("Y", fontsize=12)
-        ax.set_zlabel("Z", fontsize=12)
-
-        # 各軸の範囲を個別に設定
+        # 各軸の範囲を個別に設定 (中略)
         ax.set_xlim(center[0] - x_margin, center[0] + x_margin)
         ax.set_ylim(center[1] - y_margin, center[1] + y_margin)
         ax.set_zlim(center[2] - z_margin, center[2] + z_margin)
 
-        frame_idx = pose.get("frame_idx", frame)
+        # 修正点: frame_idxはposeディクショナリに保存されている元のフレーム番号を使用
+        frame_idx = pose["frame_idx"]
         ax.set_title(
             f'Frame: {frame_idx} | Time: {pose["time"]:.2f}s | Roll: {pose["roll"]:.1f}° Pitch: {pose["pitch"]:.1f}° Yaw: {pose["yaw"]:.1f}°',
             fontsize=12,
@@ -474,7 +498,11 @@ def create_animation(poses, interval=50, save_path=None):
         ax.legend(loc="upper right", fontsize=10)
         ax.grid(True, alpha=0.3)
 
-    anim = FuncAnimation(fig, update, frames=len(poses), interval=interval, repeat=True)
+    # --- 4. FuncAnimationの呼び出し ---
+    # framesの数は subset_poses の長さに一致させる
+    anim = FuncAnimation(
+        fig, update, frames=len(subset_poses), interval=interval, repeat=True
+    )
 
     if save_path:
         print(f"{save_path} に保存中...")
@@ -519,6 +547,55 @@ def print_frame_info(poses, frame_idx=0):
         f"\n中心位置: {np.mean([pose['p1'], pose['p2'], pose['p3'], pose['p4'], pose['p5']], axis=0)}"
     )
 
+    ###動画を複数保存したいンゴ
+
+
+# 複数セグメントの動画を保存する関数
+def save_segmented_animations(
+    poses, time_segments, base_filename="kuwa_segment", interval=50
+):
+    """
+    時間区切り配列に基づき、連続した区間で動画を保存する。
+
+    Parameters:
+    poses (list): 全姿勢データ
+    time_segments (list): 動画の区切りとなる時刻 (例: [1, 5, 10, 20])
+    base_filename (str): 保存ファイル名の基本部分
+    interval (int): アニメーションの間隔 (ms)
+    """
+    if len(time_segments) < 2:
+        print("エラー: time_segments には2つ以上の時刻が必要です。")
+        return
+
+    # 配列を連続する (開始時刻, 終了時刻) のペアに変換
+    segment_pairs = list(zip(time_segments[:-1], time_segments[1:]))
+
+    print(f"--- {len(segment_pairs)} 個の動画セグメントを保存します ---")
+
+    for i, (start_time, end_time) in enumerate(segment_pairs):
+        # ファイル名を生成 (例: kuwa_segment_01_0.0s-5.0s.gif)
+        output_filename = (
+            f"{base_filename}_{i+1:02d}_{start_time:.1f}s-{end_time:.1f}s.gif"
+        )
+        print(
+            f"\n[セグメント {i+1}] {start_time:.1f}s から {end_time:.1f}s までを {output_filename} に保存中..."
+        )
+
+        # create_animation 関数を呼び出し、保存パスを指定
+        # アニメーションは即座に表示せず、ファイルとして保存される
+        anim = create_animation(
+            poses,
+            start_time=start_time,
+            end_time=end_time,
+            interval=interval,
+            save_path=output_filename,  # ここで保存を実行
+        )
+
+        # FuncAnimationの save メソッドは、内部でアニメーションを生成し保存する
+        # そのため、通常、保存処理が終わると anim オブジェクト自体は破棄されます
+
+    print("\nすべてのセグメントの保存が完了しました。")
+
 
 # 使用例
 if __name__ == "__main__":
@@ -544,12 +621,25 @@ if __name__ == "__main__":
     # 姿勢データをCSVに出力
     export_poses_to_csv(poses, "kuwa_poses.csv")
 
+    start_sec = 5
+    end_sec = 20
+
     # アニメーション（コメントを外して使用）
     print("アニメーション作成中...")
-    anim = create_animation(poses, interval=50)
+    anim = create_animation(poses, start_time=start_sec, end_time=end_sec, interval=50)
     plt.show()
 
     # アニメーションをGIFとして保存
     # print("GIF保存中...")
     # anim.save('kuwa_animation.gif', writer='pillow', fps=20)
     # print("保存完了: kuwa_animation.gif")
+
+    ###時間の区切りで動画保存
+    segment_times = [5, 10, 15]
+
+    save_segmented_animations(
+        poses,
+        time_segments=segment_times,
+        base_filename="kuwa_segment_output",
+        interval=50,  # 20fpsに相当
+    )
