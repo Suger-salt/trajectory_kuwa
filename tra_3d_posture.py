@@ -615,6 +615,67 @@ def save_segmented_animations(
     print("\nすべてのセグメントの保存が完了しました。")
 
 
+def save_segmented_csv(
+    df,
+    time_segments,
+    base_filename="kuwa_segment_csv",
+    output_directory="csv_segment",
+    time_column="time",
+):
+    """
+    time_segments に基づき、元の CSV を時間で切り出して別 CSV として保存する。
+
+    Parameters:
+        df             : 元の DataFrame（load_data(csv_path) で読み込んだもの）
+        time_segments  : 時間の区切りリスト e.g. [5, 10, 15, 20]
+        base_filename  : 出力ファイル名のベース
+        output_directory : 保存フォルダ名（デフォルト: 'csv_segment'）
+        time_column    : 時間の列名（デフォルト: 'time'）
+    """
+    if time_column not in df.columns:
+        print(
+            f"エラー: time列 '{time_column}' が見つかりません。列一覧: {df.columns.tolist()}"
+        )
+        return
+
+    # time列を数値化（文字列混じりでも安全にするため）
+    t = pd.to_numeric(df[time_column], errors="coerce")
+    df = df.copy()
+    df[time_column] = t
+
+    # 有効な time の行だけ使う
+    df = df[np.isfinite(df[time_column])]
+
+    if len(time_segments) < 2:
+        print("エラー: time_segments には2つ以上の時刻が必要です。")
+        return
+
+    os.makedirs(output_directory, exist_ok=True)
+
+    segment_pairs = list(zip(time_segments[:-1], time_segments[1:]))
+
+    print(f"--- {len(segment_pairs)} 個の CSV セグメントを保存します ---")
+
+    for i, (start_time, end_time) in enumerate(segment_pairs):
+        # 区間のフィルタ（ここでは [start, end] を両端含める）
+        mask = (df[time_column] >= start_time) & (df[time_column] <= end_time)
+        df_seg = df[mask].copy()
+
+        if df_seg.empty:
+            print(f"[セグメント {i+1}] {start_time}–{end_time}s: データなし → スキップ")
+            continue
+
+        filename = f"{base_filename}_{i+1:02d}_{start_time:.1f}s-{end_time:.1f}s.csv"
+        out_path = os.path.join(output_directory, filename)
+
+        df_seg.to_csv(out_path, index=False, encoding="utf-8")
+        print(
+            f"[セグメント {i+1}] {start_time}–{end_time}s → {out_path} に保存しました。"
+        )
+
+    print("CSV セグメントの保存が完了しました。")
+
+
 # 使用例
 if __name__ == "__main__":
     # CSVファイルを読み込む
@@ -640,8 +701,8 @@ if __name__ == "__main__":
     export_poses_to_csv(poses, "kuwa_poses.csv")
 
     # ここで時間の区切りが分かるよ！
-    start_sec = 38
-    end_sec = 48
+    start_sec = 5
+    end_sec = 80
 
     # アニメーション（コメントを外して使用）
     print("アニメーション作成中...")
@@ -654,14 +715,26 @@ if __name__ == "__main__":
     # print("保存完了: kuwa_animation.gif")
 
     ###時間の区切りで動画保存
-    segment_times = [5, 10, 15]
+    segment_times = [5, 11, 17, 24, 27, 33, 41, 47, 51, 57, 63, 71, 76]
+    # segment_times = [
+    #     5,
+    #     11,
+    #     17,
+    # ]
 
-    # ここコメントアウトで保存しない
-    # save_segmented_animations(
-    #     poses,
+    # ここコメントアウトで保存しないこれは動画
+    save_segmented_animations(
+        poses,
+        time_segments=segment_times,
+        base_filename="kuwa_segment_output",
+        interval=50,  # 20fpsに相当
+        output_directory="data",
+    )
 
-    #     time_segments=segment_times,
-    #     base_filename="kuwa_segment_output",
-    #     interval=50,  # 20fpsに相当
-    #     output_directory="data",
-    # )
+    # # ここでcsvファイルの切り取り処理を記述
+    save_segmented_csv(
+        df,
+        time_segments=segment_times,
+        base_filename="kuwa_segment_output",
+        output_directory="csv_segment",
+    )

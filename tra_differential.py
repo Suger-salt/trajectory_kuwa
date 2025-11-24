@@ -6,11 +6,11 @@ import matplotlib.pyplot as plt
 
 ### ここで時間を軸にした、速度や加速度の変化量を見てみたい。
 # ====== 設定（ここを変える） ======
-FILE    = "2025_1025_dobusarai.csv"
-POINT   = "kuwa - 1"         # 例: "kuwa - 2"
-AXIS    = "z"                # ← 'x' / 'y' / 'z' から選ぶ
-T_START = None               # 例: 0.0（Noneなら最小時刻）
-T_END   = 40.0               # 例: 30.0（Noneなら最大時刻）
+FILE = "2025_1025_dobusarai.csv"
+POINT = "kuwa - 1"  # 例: "kuwa - 2"
+AXIS = "z"  # ← 'x' / 'y' / 'z' から選ぶ
+T_START = None  # 例: 0.0（Noneなら最小時刻）
+T_END = 80.0  # 例: 30.0（Noneなら最大時刻）
 # ===============================
 
 # --- 読み込み & 数値化 ---
@@ -28,7 +28,7 @@ dfc = dfc.groupby("t", as_index=False).mean().sort_values("t")
 # 時間スパン適用（片方だけ指定でもOK）
 tmin, tmax = dfc["t"].min(), dfc["t"].max()
 t0 = tmin if T_START is None else T_START
-t1 = tmax if T_END   is None else T_END
+t1 = tmax if T_END is None else T_END
 if t0 > t1:
     t0, t1 = t1, t0
 dfc = dfc[(dfc["t"] >= t0) & (dfc["t"] <= t1)]
@@ -37,10 +37,12 @@ dfc = dfc[(dfc["t"] >= t0) & (dfc["t"] <= t1)]
 t = dfc["t"].to_numpy()
 p = dfc["p"].to_numpy()
 if len(t) < 3:
-    raise ValueError("この時間範囲では点が少なすぎます。T_START/T_END を調整してください。")
+    raise ValueError(
+        "この時間範囲では点が少なすぎます。T_START/T_END を調整してください。"
+    )
 
 # --- 速度・加速度（選んだ軸のみ） ---
-pdot  = np.gradient(p, t)   # 速度（mm/s）
+pdot = np.gradient(p, t)  # 速度（mm/s）
 pddot = np.gradient(pdot, t)  # 加速度（mm/s^2）
 
 # （任意）ノイズが強いときの移動平均
