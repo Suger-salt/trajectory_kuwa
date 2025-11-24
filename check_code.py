@@ -5,7 +5,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 
 # ==========================================
-# 改良版 DMPクラス (幅の計算をロバストにしました)
+# 計算が全然上手くいかななかった。
 # ==========================================
 class DMP:
     def __init__(self, n_bfs=100, alpha=25.0, beta=6.25):
@@ -91,20 +91,14 @@ class DMP:
         dy = np.zeros(self.n_dims)
         s = 1.0
 
-        # 速度を記録する配列を追加
-        n_steps = int(tau / dt)
-        y_track = np.zeros((n_steps, self.n_dims))
-        dy_track = np.zeros((n_steps, self.n_dims))  # ★追加
-
         for i in range(n_steps):
             y_track[i] = y
-            dy_track[i] = dy  # ★ここで速度を記録
             ddy = self.step(y, dy, s, tau, g, y0)
             dy += ddy * dt
             y += dy * dt
             ds = -self.alpha * s / tau
             s += ds * dt
-        return y_track, dy_track, t_arr
+        return y_track, t_arr
 
 
 # ==========================================
@@ -134,47 +128,71 @@ if __name__ == "__main__":
     # ★ここで数を変えても大丈夫になります
     n_bfs_test = 100
 
-    # 1. パディングデータの作成
-    padding = np.tile(trajectory_smooth[-1], (500, 1))
-    trajectory_padded = np.vstack([trajectory_smooth, padding])
-
-    # 2. DMPの学習
     print(f"DMP Training with {n_bfs_test} BFs...")
     dmp = DMP(n_bfs=n_bfs_test)
-    dmp.fit(trajectory_padded, dt)
+    dmp.fit(trajectory_smooth, dt)
 
-    # 3. 再生設定
-    tau_padded = len(trajectory_padded) * dt
-    y0 = trajectory_padded[0]
-    g = trajectory_padded[-1]
+    tau = time_raw[-1] - time_raw[0]
+    y0 = trajectory_smooth[0]
+    g = trajectory_smooth[-1]
 
-    # 4. 軌道生成 (Rollout)
-    # ★ここを一回だけにしました
-    print("Generating Trajectory...")
-    y_repro, dy_repro, t_repro = dmp.rollout(y0, g, tau_padded, dt)
+    y_repro, t_repro = dmp.rollout(y0, g, tau, dt)
 
-    # 5. 結果の切り出し (グラフにはパディング部分は不要ならここで切る)
-    # original_len = len(trajectory_smooth)
-    # y_repro = y_repro[:original_len]
-    # dy_repro = dy_repro[:original_len]
-    # t_repro = t_repro[:original_len]
+    # グラフ描画
+    fig = plt.figure(figsize=(12, 6))  # サイズを少し大きくしました
 
-    # --- 速度のグラフを描画 ---
-    fig = plt.figure(figsize=(10, 8))
+    # --- 3Dプロット ---
+    ax1 = fig.add_subplot(121, projection="3d")
+    ax1.plot(
+        trajectory_smooth[:, 0],
+        trajectory_smooth[:, 1],
+        trajectory_smooth[:, 2],
+        "k--",
+        label="Original (Human)",
+        alpha=0.3,
+    )
+    ax1.plot(
+        y_repro[:, 0],
+        y_repro[:, 1],
+        y_repro[:, 2],
+        "b-",
+        linewidth=2,
+        label="DMP Reproduction",
+    )
 
-    # 上段：位置 (Position)
-    ax1 = fig.add_subplot(211)
-    ax1.plot(t_repro, y_repro)
-    ax1.set_title("Position [mm]")
-    ax1.legend(["X", "Y", "Z"])
-    ax1.grid(True)
+    # ★ここに単位を追加しました
+    ax1.set_title(f"3D Trajectory (n_bfs={n_bfs_test})")
+    ax1.set_xlabel("X [mm]")
+    ax1.set_ylabel("Y [mm]")
+    ax1.set_zlabel("Z [mm]")
+    ax1.legend()
 
-    # 下段：速度 (Velocity)
-    ax2 = fig.add_subplot(212)
-    ax2.plot(t_repro, dy_repro)
-    ax2.set_title("Velocity [mm/s]")  # DMPが計算した速度！
-    ax2.legend(["Vel_X", "Vel_Y", "Vel_Z"])
+    # --- 時系列プロット ---
+    ax2 = fig.add_subplot(122)
+    labels = ["X", "Y", "Z"]
+    colors = ["r", "g", "b"]  # 色分け (赤:X, 緑:Y, 青:Z)
+
+    for i in range(3):
+        ax2.plot(
+            time_raw,
+            trajectory_smooth[:, i],
+            linestyle="--",
+            color=colors[i],
+            alpha=0.3,
+        )
+        ax2.plot(
+            time_raw[0] + t_repro,
+            y_repro[:, i],
+            linestyle="-",
+            color=colors[i],
+            label=f"{labels[i]}",
+        )
+
+    ax2.set_title("Time Series")
     ax2.set_xlabel("Time [s]")
+    # ★ここにも単位を追加
+    ax2.set_ylabel("Position [mm]")
+    ax2.legend()
     ax2.grid(True)
 
     plt.tight_layout()
