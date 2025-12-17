@@ -3,6 +3,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from matplotlib.animation import FuncAnimation
+import matplotlib.ticker as ticker
 import os
 
 
@@ -32,11 +33,11 @@ def calculate_pose(p2, p3, p5):
     x_axis = v23 / np.linalg.norm(v23)
 
     # Z軸: X軸とv25の外積
-    # z_axis_raw = np.cross(x_axis, v25)
-    # z_axis = z_axis_raw / np.linalg.norm(z_axis_raw)
+    z_axis_raw = np.cross(x_axis, v25)
+    z_axis = z_axis_raw / np.linalg.norm(z_axis_raw)
     # 外積の向きを逆方向に変換する
-    z_axis = np.cross(v25, x_axis)
-    z_axis = z_axis / np.linalg.norm(z_axis)
+    # z_axis = np.cross(v25, x_axis)
+    # z_axis = z_axis / np.linalg.norm(z_axis)
 
     # Y軸: Z軸とX軸の外積
     y_axis = np.cross(z_axis, x_axis)
@@ -292,28 +293,67 @@ def visualize_frame(pose, frame_idx=0):
 
 
 # 時系列グラフ
-def plot_time_series(poses):
-    """姿勢角の時系列変化をプロット"""
-    times = [p["time"] for p in poses]
-    rolls = [p["roll"] for p in poses]
-    pitches = [p["pitch"] for p in poses]
-    yaws = [p["yaw"] for p in poses]
+def plot_time_series(poses, start_time=None, end_time=None):
+    """
+    姿勢角の時系列変化をプロット（範囲指定＆目盛り調整機能付き）
 
-    fig, axes = plt.subplots(3, 1, figsize=(12, 8))
+    Parameters:
+    poses (list): 姿勢データのリスト
+    start_time (float): 表示開始時刻 (秒)
+    end_time (float): 表示終了時刻 (秒)
+    """
+    # 1. データを抽出
+    times = np.array([p["time"] for p in poses])
+    rolls = np.array([p["roll"] for p in poses])
+    pitches = np.array([p["pitch"] for p in poses])
+    yaws = np.array([p["yaw"] for p in poses])
 
+    # 2. 範囲指定があればフィルタリング
+    if start_time is not None and end_time is not None:
+        mask = (times >= start_time) & (times <= end_time)
+        times = times[mask]
+        rolls = rolls[mask]
+        pitches = pitches[mask]
+        yaws = yaws[mask]
+
+        # データがない場合の安全策
+        if len(times) == 0:
+            print(f"エラー: 指定範囲 {start_time}s〜{end_time}s にデータがありません")
+            return None
+
+    # 3. プロット作成
+    fig, axes = plt.subplots(3, 1, figsize=(12, 10))  # 少し縦長にしました
+
+    # --- Roll ---
     axes[0].plot(times, rolls, "r-", linewidth=2)
-    axes[0].set_ylabel("Roll (°)")
+    axes[0].set_ylabel("Roll (°)", fontsize=12)
     axes[0].grid(True)
-    axes[0].set_title("kuwa_change_posture (Euler anges) ")
+    axes[0].set_title(f"Kuwa Posture ({start_time}s - {end_time}s)", fontsize=14)
 
+    # --- Pitch ---
     axes[1].plot(times, pitches, "g-", linewidth=2)
-    axes[1].set_ylabel("Pitch (°)")
+    axes[1].set_ylabel("Pitch (°)", fontsize=12)
     axes[1].grid(True)
 
+    # --- Yaw ---
     axes[2].plot(times, yaws, "b-", linewidth=2)
-    axes[2].set_ylabel("Yaw (°)")
-    axes[2].set_xlabel("Time (s)")
+    axes[2].set_ylabel("Yaw (°)", fontsize=12)
+    axes[2].set_xlabel("Time (s)", fontsize=12)
     axes[2].grid(True)
+
+    # 4. X軸の目盛りを2秒刻みに設定 & 範囲固定
+    if start_time is not None and end_time is not None:
+        for ax in axes:
+            # X軸の範囲を厳密に指定
+            ax.set_xlim(start_time, end_time)
+
+            # 目盛りを2秒刻みにする (MultipleLocatorを使用)
+            # ax.xaxis.set_major_locator(ticker.MultipleLocator(2))
+            ax.xaxis.set_minor_locator(ticker.MultipleLocator(0.1))
+
+            # 補助目盛り（1秒刻み）もあると見やすいかも（お好みで）
+            ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
+            ax.grid(which="minor", alpha=0.3)  # 補助目盛りのグリッド
 
     plt.tight_layout()
     return fig
@@ -679,6 +719,80 @@ def save_segmented_csv(
     print("CSV セグメントの保存が完了しました。")
 
 
+def plot_angular_velocity(poses, start_time=None, end_time=None):
+    """
+    姿勢角の微分（角速度）をプロットする関数
+
+    Parameters:
+    poses (list): 姿勢データのリスト
+    start_time (float): 表示開始時刻 (秒)
+    end_time (float): 表示終了時刻 (秒)
+    """
+    # 1. データを抽出
+    times = np.array([p["time"] for p in poses])
+    rolls = np.array([p["roll"] for p in poses])
+    pitches = np.array([p["pitch"] for p in poses])
+    yaws = np.array([p["yaw"] for p in poses])
+
+    # 2. 範囲指定があればフィルタリング
+    if start_time is not None and end_time is not None:
+        mask = (times >= start_time) & (times <= end_time)
+        times = times[mask]
+        rolls = rolls[mask]
+        pitches = pitches[mask]
+        yaws = yaws[mask]
+
+        if len(times) == 0:
+            print(f"エラー: 指定範囲 {start_time}s〜{end_time}s にデータがありません")
+            return None
+
+    # 3. 微分（差分）を計算
+    # np.diff で隣り合う要素の差分を計算
+    # 時間間隔 dt も計算して割ることで「速度 (deg/s)」にする
+    dt = np.diff(times)
+
+    # dtが0になる（同じ時刻のデータがある）場合のゼロ除算を防ぐ
+    dt[dt == 0] = 1e-9
+
+    # 差分をとると要素数が1つ減るので、timesも1つ減らす（始点を合わせる）
+    d_times = times[:-1]
+
+    d_rolls = np.diff(rolls) / dt
+    d_pitches = np.diff(pitches) / dt
+    d_yaws = np.diff(yaws) / dt
+
+    # 4. プロット作成
+    fig, axes = plt.subplots(3, 1, figsize=(12, 10))
+
+    # --- Roll Velocity ---
+    axes[0].plot(d_times, d_rolls, "r-", linewidth=1)
+    axes[0].set_ylabel("Roll Velocity (deg/s)", fontsize=12)
+    axes[0].grid(True)
+    axes[0].set_title(f"Angular Velocity ({start_time}s - {end_time}s)", fontsize=14)
+
+    # --- Pitch Velocity ---
+    axes[1].plot(d_times, d_pitches, "g-", linewidth=1)
+    axes[1].set_ylabel("Pitch Velocity (deg/s)", fontsize=12)
+    axes[1].grid(True)
+
+    # --- Yaw Velocity ---
+    axes[2].plot(d_times, d_yaws, "b-", linewidth=1)
+    axes[2].set_ylabel("Yaw Velocity (deg/s)", fontsize=12)
+    axes[2].set_xlabel("Time (s)", fontsize=12)
+    axes[2].grid(True)
+
+    # 5. X軸の目盛り設定
+    if start_time is not None and end_time is not None:
+        for ax in axes:
+            ax.set_xlim(start_time, end_time)
+            ax.xaxis.set_major_locator(ticker.MultipleLocator(2))
+            ax.xaxis.set_minor_locator(ticker.MultipleLocator(1))
+            ax.grid(which="minor", alpha=0.3)
+
+    plt.tight_layout()
+    return fig
+
+
 # 使用例
 if __name__ == "__main__":
     # CSVファイルを読み込む
@@ -741,3 +855,24 @@ if __name__ == "__main__":
     #     base_filename="kuwa_segment_output",
     #     output_directory="csv_segment",
     # )
+
+    # print("グラフを作成中...")
+    # fig = plot_time_series(poses, start_time=46, end_time=56)
+
+    # if fig:
+    #     plt.show()
+
+    # print("角速度グラフを作成中...")
+    # fig_vel = plot_angular_velocity(poses, start_time=46, end_time=56)
+
+    # if fig_vel:
+    #     plt.show()
+
+    fig_pose = plot_time_series(poses, start_time=41, end_time=43)
+    if fig_pose:
+        plt.show()
+
+    # 2. 角速度（微分値）のグラフ
+    fig_vel = plot_angular_velocity(poses, start_time=41, end_time=43)
+    if fig_vel:
+        plt.show()
